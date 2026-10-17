@@ -1,0 +1,13 @@
+pi/images/
+pi/cloud-init/password.local
+pi/cloud-init/user-data
+pi/flash.log
+pi/flash.status
+pi/flash.err.log
+pi/finalize.status
+*.img
+*.img.xz
+.env
+.env.*
+*.token
+.cache/

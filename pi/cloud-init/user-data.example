@@ -1,0 +1,22 @@
+#cloud-config
+
+hostname: starter-jar
+manage_etc_hosts: true
+timezone: America/Los_Angeles
+
+users:
+  - name: pi
+    groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: "REPLACE_WITH_SHA512_CRYPT_HASH"
+    ssh_authorized_keys:
+      - ssh-ed25519 REPLACE_WITH_YOUR_PUBLIC_KEY
+    sudo: ALL=(ALL) NOPASSWD:ALL
+
+rpi:
+  i2c: true
+  spi: true
+
+enable_ssh: true
+ssh_pwauth: true
