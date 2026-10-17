@@ -26,6 +26,19 @@ Data line is **BCM GPIO 18** (physical pin 12). Power the module from 3.3V or 5V
 ./scripts/read-dht11.sh --loop
 ```
 
+## Collector
+
+`collector.py` writes DHT11 samples to the same InfluxDB 1.x instance as the [WeatherStation logger](https://github.com/rylero/WeatherStation/blob/main/logger.py) and saves a CSI still about every 15 minutes under `data/timelapse/YYYY-MM-DD/`. GPIO 24 turns on for each frame.
+
+```bash
+sudo apt install -y python3-influxdb
+cp config.example.env .env
+./scripts/install-collector.sh        # enable on boot, do not start
+# ./scripts/install-collector.sh --now
+```
+
+Defaults match the WeatherStation client: `homeassistant.local:8086`, user `home_assistant`, database `starter_jar`. Override them in `.env`. Sensor period is 60s; frame period is 900s.
+
 ## Pi image
 
 `pi/flash-sd.ps1` writes Raspberry Pi OS Lite 64-bit with SSH over Ethernet. Copy `pi/cloud-init/user-data.example` to `user-data` and fill in your password hash and SSH key before flashing.

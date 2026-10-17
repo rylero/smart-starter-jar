@@ -1,0 +1,16 @@
+[Unit]
+Description=Smart starter jar collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/smart-starter-jar
+EnvironmentFile=-/home/pi/smart-starter-jar/.env
+ExecStart=/usr/bin/python3 -u /home/pi/smart-starter-jar/collector.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

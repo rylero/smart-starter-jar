@@ -31,6 +31,18 @@ def read_once(device: str) -> tuple[float, float]:
     return temperature / 1000.0, humidity / 1000.0
 
 
+def read(retries: int = 8, interval: float = 2.0) -> tuple[float, float]:
+    device = find_iio_device()
+    last_error: OSError | RuntimeError | None = None
+    for _ in range(retries):
+        try:
+            return read_once(device)
+        except OSError as exc:
+            last_error = exc
+            time.sleep(interval)
+    raise last_error or RuntimeError("DHT11 read failed")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--gpio", type=int, default=int(os.environ.get("DHT11_GPIO", DEFAULT_GPIO)))

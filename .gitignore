@@ -12,3 +12,4 @@ pi/finalize.status
 *.token
 .cache/
 .venv/
+data/
