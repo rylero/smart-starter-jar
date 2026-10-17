@@ -22,8 +22,16 @@ STREAM_PORT = int(os.environ.get("STREAM_PORT", "8080"))
 STREAM_WIDTH = int(os.environ.get("STREAM_WIDTH", os.environ.get("FRAME_WIDTH", "1280")))
 STREAM_HEIGHT = int(os.environ.get("STREAM_HEIGHT", os.environ.get("FRAME_HEIGHT", "720")))
 STREAM_FPS = int(os.environ.get("STREAM_FPS", "8"))
+STREAM_EV = os.environ.get("STREAM_EV", "1.5")
 TIMELAPSE_DIR = Path(os.environ.get("TIMELAPSE_DIR", "data/timelapse")).resolve()
 RPICAM_EXTRA_ARGS = [part for part in os.environ.get("RPICAM_EXTRA_ARGS", "").split() if part]
+
+
+def camera_args() -> list[str]:
+    extra = list(RPICAM_EXTRA_ARGS)
+    if STREAM_EV and "--ev" not in extra:
+        extra.extend(["--ev", STREAM_EV])
+    return extra
 
 
 def save_frame(frames: LatestFrame) -> Path:
@@ -59,7 +67,7 @@ def main() -> int:
     camera = None
     server = None
     try:
-        camera = start_camera(STREAM_WIDTH, STREAM_HEIGHT, STREAM_FPS, RPICAM_EXTRA_ARGS)
+        camera = start_camera(STREAM_WIDTH, STREAM_HEIGHT, STREAM_FPS, camera_args())
         start_frame_pump(camera, frames)
         print("camera stream started", flush=True)
     except Exception as exc:  # noqa: BLE001
@@ -68,7 +76,7 @@ def main() -> int:
     server = start_http(state, STREAM_BIND, STREAM_PORT)
     print(
         f"collector started sensor={SENSOR_INTERVAL}s frame={FRAME_INTERVAL}s "
-        f"site=http://{STREAM_BIND}:{STREAM_PORT}/ light=GPIO{light.LIGHT_GPIO} "
+        f"site=http://{STREAM_BIND}:{STREAM_PORT}/ light=GPIO{','.join(str(p) for p in light.LIGHT_GPIOS)} "
         f"influx={logger.INFLUX_HOST}/{logger.INFLUX_DATABASE}",
         flush=True,
     )
