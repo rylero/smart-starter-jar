@@ -18,7 +18,7 @@ Optional environment variables: `STREAM_WIDTH`, `STREAM_HEIGHT`, `STREAM_FPS`, `
 
 ## DHT11 temperature and humidity
 
-Data line is **BCM GPIO 17** (physical pin 11). Power the module from 3.3V or 5V, depending on the breakout, and share a GND with the Pi.
+Data line is **BCM GPIO 18** (physical pin 12). Power the module from 3.3V or 5V, depending on the breakout, and share a GND with the Pi.
 
 ```bash
 ./scripts/setup-dht11.sh

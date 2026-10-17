@@ -1,24 +1,16 @@
 #!/usr/bin/env bash
-# Free GPIO 17 from the kernel DHT11 overlay and install a userspace reader.
+# Load the DHT11 overlay on BCM GPIO 18 (physical pin 12).
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIG="/boot/firmware/config.txt"
-LINE="dtoverlay=dht11,gpiopin=17"
+LINE="dtoverlay=dht11,gpiopin=18"
 
-if grep -qF "$LINE" "$CONFIG"; then
-  sudo sed -i "/^# DHT11 data on BCM GPIO 17$/d;/^${LINE}$/d" "$CONFIG"
-  echo "Removed $LINE from $CONFIG"
-fi
+sudo sed -i '/^# DHT11 data on BCM GPIO 1[78]$/d;/^dtoverlay=dht11,gpiopin=1[78]$/d' "$CONFIG"
+printf '\n# DHT11 data on BCM GPIO 18\n%s\n' "$LINE" | sudo tee -a "$CONFIG" >/dev/null
+echo "Wrote $LINE to $CONFIG"
 
 if sudo dtoverlay -l | grep -q dht11; then
   sudo dtoverlay -r dht11
-  echo "Unloaded dht11 overlay"
 fi
-
-if [[ ! -x "$ROOT/.venv/bin/python" ]]; then
-  python3 -m venv --system-site-packages "$ROOT/.venv"
-fi
-"$ROOT/.venv/bin/pip" install --upgrade pip
-"$ROOT/.venv/bin/pip" install --upgrade adafruit-circuitpython-dht
-echo "DHT11 userspace reader is ready"
+sudo dtoverlay dht11 gpiopin=18
+echo "Loaded dht11 overlay on GPIO 18"

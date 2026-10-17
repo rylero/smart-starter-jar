@@ -1,32 +1,34 @@
 #!/usr/bin/env python3
-"""Read a DHT11 on BCM GPIO 17 using Adafruit CircuitPython."""
+"""Read a DHT11 on BCM GPIO 18 (physical pin 12) via the kernel IIO driver."""
 
 from __future__ import annotations
 
 import argparse
+import glob
 import os
 import sys
 import time
 
-DEFAULT_GPIO = 17
+DEFAULT_GPIO = 18
 
 
-def open_sensor(gpio: int):
-    import adafruit_dht
-    import board
+def find_iio_device() -> str:
+    for path in glob.glob("/sys/bus/iio/devices/iio:device*"):
+        try:
+            name = open(os.path.join(path, "name"), encoding="ascii").read().strip()
+        except OSError:
+            continue
+        if name.startswith("dht11"):
+            return path
+    raise RuntimeError(
+        "DHT11 IIO device not found. Run ./scripts/setup-dht11.sh then retry."
+    )
 
-    pin = getattr(board, f"D{gpio}", None)
-    if pin is None:
-        raise SystemExit(f"board.D{gpio} is not a valid CircuitPython pin")
-    return adafruit_dht.DHT11(pin, use_pulseio=False)
 
-
-def read_once(sensor) -> tuple[float, float]:
-    temperature = sensor.temperature
-    humidity = sensor.humidity
-    if temperature is None or humidity is None:
-        raise RuntimeError("DHT11 returned an empty reading")
-    return float(temperature), float(humidity)
+def read_once(device: str) -> tuple[float, float]:
+    temperature = int(open(os.path.join(device, "in_temp_input"), encoding="ascii").read())
+    humidity = int(open(os.path.join(device, "in_humidityrelative_input"), encoding="ascii").read())
+    return temperature / 1000.0, humidity / 1000.0
 
 
 def main() -> int:
@@ -36,29 +38,25 @@ def main() -> int:
     parser.add_argument("--interval", type=float, default=2.0)
     parser.add_argument("--loop", action="store_true")
     args = parser.parse_args()
-
-    sensor = open_sensor(args.gpio)
-    try:
-        while True:
-            last_error = None
-            for _ in range(args.retries):
-                try:
-                    temperature, humidity = read_once(sensor)
-                    print(f"{temperature:.1f} C  {humidity:.1f} %RH")
-                    last_error = None
-                    break
-                except Exception as exc:  # noqa: BLE001 - DHT11 checksum/timeouts are common
-                    last_error = exc
-                    time.sleep(args.interval)
-            if last_error:
-                print(f"failed after {args.retries} tries: {last_error}", file=sys.stderr)
-                if not args.loop:
-                    return 1
+    device = find_iio_device()
+    while True:
+        last_error = None
+        for _ in range(args.retries):
+            try:
+                temperature, humidity = read_once(device)
+                print(f"{temperature:.1f} C  {humidity:.1f} %RH")
+                last_error = None
+                break
+            except OSError as exc:
+                last_error = exc
+                time.sleep(args.interval)
+        if last_error:
+            print(f"failed after {args.retries} tries: {last_error}", file=sys.stderr)
             if not args.loop:
-                return 0
-            time.sleep(args.interval)
-    finally:
-        sensor.exit()
+                return 1
+        if not args.loop:
+            return 0
+        time.sleep(args.interval)
 
 
 if __name__ == "__main__":
