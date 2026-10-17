@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Turn the capture lights on GPIO 23 and 24 for one second.
+# Flash each capture LED by itself so wiring can be checked.
 set -euo pipefail
 
 PINS=(${LIGHT_GPIOS:-23 24})
 
 for pin in "${PINS[@]}"; do
+  echo "GPIO $pin on"
   pinctrl set "$pin" op dh
-done
-sleep 1
-for pin in "${PINS[@]}"; do
+  sleep 1
   pinctrl set "$pin" op dl
+  echo "GPIO $pin off"
+  sleep 0.4
 done
