@@ -12,7 +12,7 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Optional
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 JPEG_START = b"\xff\xd8"
 JPEG_END = b"\xff\xd9"
@@ -89,38 +89,15 @@ def start_camera(width: int, height: int, fps: int, extra_args: list[str]) -> su
     )
 
 
-def build_handler(frames: LatestFrame, token: str, page_title: str):
-    expected = f"/t/{token}"
-
+def build_handler(frames: LatestFrame, page_title: str):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
         def log_message(self, fmt: str, *args) -> None:
             sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
 
-        def _authorized_path(self) -> Optional[str]:
-            parsed = urlparse(self.path)
-            path = parsed.path.rstrip("/") or "/"
-            query_token = parse_qs(parsed.query).get("token", [None])[0]
-            if path == expected or path.startswith(expected + "/"):
-                return path[len(expected) :] or "/"
-            if query_token == token and path in {"/", "/stream.mjpg", "/health"}:
-                return path
-            return None
-
-        def _deny(self) -> None:
-            body = b"unauthorized\n"
-            self.send_response(401)
-            self.send_header("Content-Type", "text/plain")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
         def do_GET(self) -> None:
-            path = self._authorized_path()
-            if path is None:
-                self._deny()
-                return
+            path = urlparse(self.path).path.rstrip("/") or "/"
             if path in {"/", "/index.html"}:
                 self._html()
                 return
@@ -138,7 +115,7 @@ def build_handler(frames: LatestFrame, token: str, page_title: str):
             self.send_error(404)
 
         def _html(self) -> None:
-            src = f"{expected}/stream.mjpg"
+            src = "/stream.mjpg"
             html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -199,18 +176,14 @@ def build_handler(frames: LatestFrame, token: str, page_title: str):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--bind", default=os.environ.get("STREAM_BIND", "127.0.0.1"))
+    parser.add_argument("--bind", default=os.environ.get("STREAM_BIND", "0.0.0.0"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("STREAM_PORT", "8080")))
-    parser.add_argument("--token", default=os.environ.get("STREAM_TOKEN"))
     parser.add_argument("--width", type=int, default=int(os.environ.get("STREAM_WIDTH", "1280")))
     parser.add_argument("--height", type=int, default=int(os.environ.get("STREAM_HEIGHT", "720")))
     parser.add_argument("--fps", type=int, default=int(os.environ.get("STREAM_FPS", "8")))
     parser.add_argument("--title", default=os.environ.get("STREAM_TITLE", "Smart Starter Jar"))
     args, extra = parser.parse_known_args()
     extra = extra or [part for part in os.environ.get("RPICAM_EXTRA_ARGS", "").split() if part]
-
-    if not args.token:
-        raise SystemExit("STREAM_TOKEN or --token is required")
 
     camera = start_camera(args.width, args.height, args.fps, extra)
     if camera.stdout is None:
@@ -226,7 +199,7 @@ def main() -> int:
     reader = threading.Thread(target=pump, name="rpicam-mjpeg", daemon=True)
     reader.start()
 
-    handler = build_handler(frames, args.token, args.title)
+    handler = build_handler(frames, args.title)
     server = ThreadingHTTPServer((args.bind, args.port), handler)
 
     def shutdown(*_sig) -> None:
@@ -235,7 +208,7 @@ def main() -> int:
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
-    print(f"local viewer: http://{args.bind}:{args.port}/t/{args.token}/", flush=True)
+    print(f"local viewer: http://{args.bind}:{args.port}/", flush=True)
     try:
         server.serve_forever(poll_interval=0.5)
     finally:

@@ -12,11 +12,9 @@ cd smart-starter-jar
 ./scripts/publish-camera.sh
 ```
 
-The script starts a local MJPEG viewer from `rpicam-vid` and publishes it with a Cloudflare quick tunnel. It prints a public `https://…trycloudflare.com` link. Anyone with that URL and token can see the camera.
+Then open `http://<pi-ip>:8080/` on the same network. The page is an MJPEG view from the CSI camera via `rpicam-vid`.
 
-The URL changes every run. The access token is stored in `~/.config/smart-starter-jar/stream.token`.
-
-Optional environment variables: `STREAM_WIDTH`, `STREAM_HEIGHT`, `STREAM_FPS`, `STREAM_TOKEN`, `RPICAM_EXTRA_ARGS` (for `--vflip`, `--hflip`, or `--rotation`).
+Optional environment variables: `STREAM_WIDTH`, `STREAM_HEIGHT`, `STREAM_FPS`, `STREAM_BIND`, `STREAM_PORT`, `RPICAM_EXTRA_ARGS` (for `--vflip`, `--hflip`, or `--rotation`).
 
 ## Pi image
 
