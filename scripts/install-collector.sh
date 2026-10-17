@@ -6,6 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 UNIT_SRC="$ROOT/systemd/starter-jar.service"
 UNIT_DST=/etc/systemd/system/starter-jar.service
 
+sudo systemctl unmask starter-jar.service 2>/dev/null || true
 sudo cp "$UNIT_SRC" "$UNIT_DST"
 sudo systemctl daemon-reload
 sudo systemctl enable starter-jar.service

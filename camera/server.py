@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import signal
@@ -13,6 +14,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Optional
 from urllib.parse import urlparse
+
+import light
 
 JPEG_START = b"\xff\xd8"
 JPEG_END = b"\xff\xd9"
@@ -28,12 +31,38 @@ class LatestFrame:
             self._frame = frame
             self._cond.notify_all()
 
+    def get(self) -> Optional[bytes]:
+        with self._cond:
+            return self._frame
+
     def wait(self, previous: Optional[bytes] = None, timeout: float = 5.0) -> Optional[bytes]:
         with self._cond:
             if self._frame is not None and self._frame is not previous:
                 return self._frame
             self._cond.wait(timeout)
             return self._frame
+
+
+class AppState:
+    def __init__(self, frames: LatestFrame, title: str = "Smart Starter Jar") -> None:
+        self.frames = frames
+        self.title = title
+        self.lock = threading.Lock()
+        self.temp_c: Optional[float] = None
+        self.humidity: Optional[float] = None
+
+    def set_reading(self, temp_c: float, humidity: float) -> None:
+        with self.lock:
+            self.temp_c = temp_c
+            self.humidity = humidity
+
+    def status(self) -> dict:
+        with self.lock:
+            return {
+                "light": light.is_on(),
+                "temp_c": self.temp_c,
+                "humidity": self.humidity,
+            }
 
 
 def iter_jpeg_frames(stream) -> None:
@@ -61,7 +90,7 @@ def iter_jpeg_frames(stream) -> None:
 def start_camera(width: int, height: int, fps: int, extra_args: list[str]) -> subprocess.Popen:
     rpicam = shutil.which("rpicam-vid")
     if not rpicam:
-        raise SystemExit("rpicam-vid not found. Install rpicam-apps-core.")
+        raise RuntimeError("rpicam-vid not found. Install rpicam-apps-core.")
 
     cmd = [
         rpicam,
@@ -89,12 +118,35 @@ def start_camera(width: int, height: int, fps: int, extra_args: list[str]) -> su
     )
 
 
-def build_handler(frames: LatestFrame, page_title: str):
+def start_frame_pump(camera: subprocess.Popen, frames: LatestFrame) -> threading.Thread:
+    if camera.stdout is None:
+        raise RuntimeError("failed to open rpicam-vid stdout")
+
+    def pump() -> None:
+        for frame in iter_jpeg_frames(camera.stdout):
+            frames.set(frame)
+        camera.wait()
+
+    reader = threading.Thread(target=pump, name="rpicam-mjpeg", daemon=True)
+    reader.start()
+    return reader
+
+
+def build_handler(state: AppState):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
         def log_message(self, fmt: str, *args) -> None:
             sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
+
+        def _json(self, payload: dict, status: int = 200) -> None:
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
         def do_GET(self) -> None:
             path = urlparse(self.path).path.rstrip("/") or "/"
@@ -103,6 +155,9 @@ def build_handler(frames: LatestFrame, page_title: str):
                 return
             if path in {"/stream.mjpg", "/stream"}:
                 self._stream()
+                return
+            if path in {"/status", "/light"}:
+                self._json(state.status())
                 return
             if path == "/health":
                 body = b"ok\n"
@@ -114,27 +169,65 @@ def build_handler(frames: LatestFrame, page_title: str):
                 return
             self.send_error(404)
 
+        def do_POST(self) -> None:
+            path = urlparse(self.path).path.rstrip("/") or "/"
+            if path == "/light":
+                light.toggle()
+                self._json(state.status())
+                return
+            if path == "/light/on":
+                self._json({"light": light.set_light(True)})
+                return
+            if path == "/light/off":
+                self._json({"light": light.set_light(False)})
+                return
+            self.send_error(404)
+
         def _html(self) -> None:
-            src = "/stream.mjpg"
             html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{page_title}</title>
+  <title>{state.title}</title>
   <style>
     :root {{ color-scheme: dark; }}
     html, body {{ margin: 0; height: 100%; background: #111; color: #eee; font-family: sans-serif; }}
-    .wrap {{ min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }}
-    img {{ max-width: 100%; max-height: 92vh; background: #000; }}
-    h1 {{ font-size: 1rem; font-weight: 600; margin: 0; letter-spacing: 0.02em; }}
+    .wrap {{ min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; box-sizing: border-box; }}
+    img {{ max-width: 100%; max-height: 78vh; background: #000; }}
+    h1 {{ font-size: 1rem; font-weight: 600; margin: 0; }}
+    .row {{ display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }}
+    button {{ font: inherit; padding: 8px 14px; border: 0; border-radius: 8px; background: #2a2a2a; color: #eee; cursor: pointer; }}
+    button.on {{ background: #c9a227; color: #111; }}
+    #stats {{ opacity: 0.8; }}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>{page_title}</h1>
-    <img src="{src}" alt="Live CSI camera">
+    <h1>{state.title}</h1>
+    <img src="/stream.mjpg" alt="Live CSI camera">
+    <div class="row">
+      <button id="light" type="button">Light</button>
+      <span id="stats"></span>
+    </div>
   </div>
+  <script>
+    const button = document.getElementById("light");
+    const stats = document.getElementById("stats");
+    async function refresh() {{
+      const response = await fetch("/status");
+      const data = await response.json();
+      button.textContent = data.light ? "Light on" : "Light off";
+      button.classList.toggle("on", !!data.light);
+      stats.textContent = data.temp_c == null ? "" : data.temp_c.toFixed(1) + " C  " + data.humidity.toFixed(1) + " %RH";
+    }}
+    button.addEventListener("click", async () => {{
+      await fetch("/light", {{ method: "POST" }});
+      refresh();
+    }});
+    refresh();
+    setInterval(refresh, 3000);
+  </script>
 </body>
 </html>
 """
@@ -156,7 +249,7 @@ def build_handler(frames: LatestFrame, page_title: str):
             previous = None
             try:
                 while True:
-                    frame = frames.wait(previous)
+                    frame = state.frames.wait(previous)
                     if frame is None or frame is previous:
                         continue
                     previous = frame
@@ -174,6 +267,14 @@ def build_handler(frames: LatestFrame, page_title: str):
     return Handler
 
 
+def start_http(state: AppState, bind: str, port: int) -> ThreadingHTTPServer:
+    server = ThreadingHTTPServer((bind, port), build_handler(state))
+    thread = threading.Thread(target=server.serve_forever, name="http", daemon=True)
+    thread.start()
+    print(f"local viewer: http://{bind}:{port}/", flush=True)
+    return server
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bind", default=os.environ.get("STREAM_BIND", "0.0.0.0"))
@@ -185,39 +286,32 @@ def main() -> int:
     args, extra = parser.parse_known_args()
     extra = extra or [part for part in os.environ.get("RPICAM_EXTRA_ARGS", "").split() if part]
 
+    light.set_light(False)
     camera = start_camera(args.width, args.height, args.fps, extra)
-    if camera.stdout is None:
-        raise SystemExit("failed to open rpicam-vid stdout")
-
     frames = LatestFrame()
+    start_frame_pump(camera, frames)
+    state = AppState(frames, args.title)
+    server = start_http(state, args.bind, args.port)
 
-    def pump() -> None:
-        for frame in iter_jpeg_frames(camera.stdout):
-            frames.set(frame)
-        camera.wait()
-
-    reader = threading.Thread(target=pump, name="rpicam-mjpeg", daemon=True)
-    reader.start()
-
-    handler = build_handler(frames, args.title)
-    server = ThreadingHTTPServer((args.bind, args.port), handler)
+    stop = threading.Event()
 
     def shutdown(*_sig) -> None:
+        stop.set()
         threading.Thread(target=server.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
-
-    print(f"local viewer: http://{args.bind}:{args.port}/", flush=True)
     try:
-        server.serve_forever(poll_interval=0.5)
+        stop.wait()
     finally:
+        server.shutdown()
         server.server_close()
         camera.terminate()
         try:
             camera.wait(timeout=5)
         except subprocess.TimeoutExpired:
             camera.kill()
+        light.set_light(False)
     return 0
 
 

@@ -28,7 +28,7 @@ Data line is **BCM GPIO 18** (physical pin 12). Power the module from 3.3V or 5V
 
 ## Collector
 
-`collector.py` writes DHT11 samples to the same InfluxDB 1.x instance as the [WeatherStation logger](https://github.com/rylero/WeatherStation/blob/main/logger.py) and saves a CSI still about every 15 minutes under `data/timelapse/YYYY-MM-DD/`. GPIO 24 turns on for each frame.
+`collector.py` is the always-on service: live view at `http://<pi-ip>:8080/` with a light toggle, DHT11 samples to Influx, and a still about every 15 minutes under `data/timelapse/YYYY-MM-DD/`. GPIO 24 is the light; the page button toggles it, and a scheduled still turns it on only if it was off.
 
 ```bash
 sudo apt install -y python3-influxdb
