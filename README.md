@@ -21,12 +21,10 @@ Optional environment variables: `STREAM_WIDTH`, `STREAM_HEIGHT`, `STREAM_FPS`, `
 Data line is **BCM GPIO 17** (physical pin 11). Power the module from 3.3V or 5V, depending on the breakout, and share a GND with the Pi.
 
 ```bash
-./scripts/enable-dht11.sh
+./scripts/setup-dht11.sh
 ./scripts/read-dht11.sh
 ./scripts/read-dht11.sh --loop
 ```
-
-`enable-dht11.sh` loads `dtoverlay=dht11,gpiopin=17` and writes it to `/boot/firmware/config.txt`.
 
 ## Pi image
 

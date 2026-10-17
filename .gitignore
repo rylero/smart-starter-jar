@@ -11,3 +11,4 @@ pi/finalize.status
 .env.*
 *.token
 .cache/
+.venv/
