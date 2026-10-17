@@ -21,8 +21,9 @@ STREAM_BIND = os.environ.get("STREAM_BIND", "0.0.0.0")
 STREAM_PORT = int(os.environ.get("STREAM_PORT", "8080"))
 STREAM_WIDTH = int(os.environ.get("STREAM_WIDTH", os.environ.get("FRAME_WIDTH", "1280")))
 STREAM_HEIGHT = int(os.environ.get("STREAM_HEIGHT", os.environ.get("FRAME_HEIGHT", "720")))
-STREAM_FPS = int(os.environ.get("STREAM_FPS", "8"))
-STREAM_SHUTTER_US = os.environ.get("STREAM_SHUTTER_US", "33000")
+STREAM_FPS = float(os.environ.get("STREAM_FPS", "1"))
+STREAM_SHUTTER_US = os.environ.get("STREAM_SHUTTER_US", "1000000")
+STREAM_GAIN = os.environ.get("STREAM_GAIN", "2")
 TIMELAPSE_DIR = Path(os.environ.get("TIMELAPSE_DIR", "data/timelapse")).resolve()
 RPICAM_EXTRA_ARGS = [part for part in os.environ.get("RPICAM_EXTRA_ARGS", "").split() if part]
 
@@ -31,6 +32,8 @@ def camera_args() -> list[str]:
     extra = list(RPICAM_EXTRA_ARGS)
     if STREAM_SHUTTER_US and "--shutter" not in extra:
         extra.extend(["--shutter", STREAM_SHUTTER_US])
+    if STREAM_GAIN and "--gain" not in extra:
+        extra.extend(["--gain", STREAM_GAIN])
     return extra
 
 
@@ -43,10 +46,10 @@ def save_frame(frames: LatestFrame) -> Path:
     was_on = light.is_on()
     if not was_on:
         light.set_light(True)
-        time.sleep(0.4)
+        time.sleep(1.5)
     try:
         previous = frames.get()
-        frame = frames.wait(previous, timeout=3.0) or frames.get()
+        frame = frames.wait(previous, timeout=5.0) or frames.get()
         if not frame:
             raise RuntimeError("no camera frame yet")
         dest.write_bytes(frame)

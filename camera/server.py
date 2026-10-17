@@ -87,7 +87,7 @@ def iter_jpeg_frames(stream) -> None:
             del buf[: end + 2]
 
 
-def start_camera(width: int, height: int, fps: int, extra_args: list[str]) -> subprocess.Popen:
+def start_camera(width: int, height: int, fps: float, extra_args: list[str]) -> subprocess.Popen:
     rpicam = shutil.which("rpicam-vid")
     if not rpicam:
         raise RuntimeError("rpicam-vid not found. Install rpicam-apps-core.")
