@@ -7,7 +7,7 @@ import subprocess
 import threading
 
 def _pins() -> list[int]:
-    raw = os.environ.get("LIGHT_GPIOS", os.environ.get("LIGHT_GPIO", "24 25"))
+    raw = os.environ.get("LIGHT_GPIOS", os.environ.get("LIGHT_GPIO", "24"))
     return [int(part) for part in raw.replace(",", " ").split() if part]
 
 

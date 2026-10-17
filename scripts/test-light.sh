@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
-# Turn the capture lights on for one second.
+# Turn the capture light on GPIO 24 for one second.
 set -euo pipefail
 
-PINS=(${LIGHT_GPIOS:-24 25})
+GPIO="${LIGHT_GPIO:-24}"
 
-for pin in "${PINS[@]}"; do
-  pinctrl set "$pin" op dh
-done
+pinctrl set "$GPIO" op dh
 sleep 1
-for pin in "${PINS[@]}"; do
-  pinctrl set "$pin" op dl
-done
+pinctrl set "$GPIO" op dl

@@ -28,7 +28,7 @@ Data line is **BCM GPIO 18** (physical pin 12). Power the module from 3.3V or 5V
 
 ## Collector
 
-`collector.py` is the always-on service: live view at `http://<pi-ip>:8080/` with a light toggle, DHT11 samples to Influx, and a still about every 15 minutes under `data/timelapse/YYYY-MM-DD/`. GPIO 24 and 25 are the lights (25 is physical pin 22). The page button toggles them, and a scheduled still turns them on only if they were off. Exposure defaults to `STREAM_EV=1.5`.
+`collector.py` is the always-on service: live view at `http://<pi-ip>:8080/` with a light toggle, DHT11 samples to Influx, and a still about every 15 minutes under `data/timelapse/YYYY-MM-DD/`. GPIO 24 is the light. Shutter defaults to `STREAM_SHUTTER_US=33000` (1/30 s).
 
 ```bash
 sudo apt install -y python3-influxdb
