@@ -2,10 +2,12 @@
 # Turn the capture lights on GPIO 23 and 24 for one second.
 set -euo pipefail
 
-PINS="${LIGHT_GPIOS:-23 24}"
+PINS=(${LIGHT_GPIOS:-23 24})
 
-# shellcheck disable=SC2086
-pinctrl set $PINS op dh
+for pin in "${PINS[@]}"; do
+  pinctrl set "$pin" op dh
+done
 sleep 1
-# shellcheck disable=SC2086
-pinctrl set $PINS op dl
+for pin in "${PINS[@]}"; do
+  pinctrl set "$pin" op dl
+done
